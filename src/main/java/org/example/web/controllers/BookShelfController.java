@@ -1,18 +1,25 @@
 package org.example.web.controllers;
 
 import org.apache.log4j.Logger;
+import org.example.app.exceptions.BookShelfFileException;
 import org.example.app.services.BookService;
 import org.example.web.dto.Book;
+import org.example.web.dto.BookField;
+import org.example.web.dto.BookIdToRemove;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import javax.validation.Valid;
+import java.io.File;
+import java.io.IOException;
 
 @Controller
 @RequestMapping(value = "/books")
+@Scope("singleton")
 public class BookShelfController {
 
     private Logger logger = Logger.getLogger(BookShelfController.class);
@@ -24,37 +31,81 @@ public class BookShelfController {
     }
 
     @GetMapping("/shelf")
-    public String books(Model model, @RequestParam(value = "filter", required = false) String filterValue) {
+    public String books(@Valid BookField filter, BindingResult bindingResult, Model model) {
         logger.info("got book shelf");
         model.addAttribute("book", new Book());
-        model.addAttribute("bookList", bookService.getBooks(filterValue));
+        model.addAttribute("bookIdToRemove", new BookIdToRemove());
+        model.addAttribute("bookField", new BookField());
+        model.addAttribute("bookList", bookService.getBooks(filter));
         return "book_shelf";
     }
 
     @PostMapping("/save")
-    public String saveBook(Book book) {
-        bookService.saveBook(book);
-        logger.info("current repository size: " + bookService.getAllBooks().size());
-        return "redirect:/books/shelf";
+    public String saveBook(@Valid Book book, BindingResult bindingResult, Model model) {
+        if(bindingResult.hasErrors()) {
+            model.addAttribute("book", book);
+            model.addAttribute("bookIdToRemove", new BookIdToRemove());
+            model.addAttribute("bookField", new BookField());
+            model.addAttribute("bookList", bookService.getAllBooks());
+            return "book_shelf";
+        } else {
+            bookService.saveBook(book);
+            logger.info("current repository size: " + bookService.getAllBooks().size());
+            return "redirect:/books/shelf";
+        }
     }
 
     @PostMapping("/remove")
-    public String removeBook(@RequestParam(value = "bookIdToRemove") Integer bookIdToRemove) {
-        if (bookService.removeBookById(bookIdToRemove)) {
-            logger.info("Books id=" + bookIdToRemove + " is deleted");
+    public String removeBook(@Valid BookIdToRemove bookIdToRemove, BindingResult bindingResult, Model model) {
+        if(bindingResult.hasErrors()) {
+            model.addAttribute("book", new Book());
+            model.addAttribute("bookField", new BookField());
+            model.addAttribute("bookList", bookService.getAllBooks());
+            return "book_shelf";
         } else {
-            logger.info("Book id = " + bookIdToRemove + " is not find");
+            bookService.removeBookById(bookIdToRemove.getId());
+            return "redirect:/books/shelf";
+        }
+    }
+
+    @PostMapping("/removeAll")
+    public String removeAll(@Valid BookField bookField, BindingResult bindingResult, Model model) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("book", new Book());
+            model.addAttribute("bookIdToRemove", new BookIdToRemove());
+            model.addAttribute("bookList", bookService.getAllBooks());
+            return "book_shelf";
+        } else {
+            bookService.removeAllBook(bookField);
+            logger.info("Books with template " + bookField.getField() + " is deleted");
         }
         return "redirect:/books/shelf";
     }
 
-    @PostMapping("/removeAll")
-    public String removeAll(@RequestParam(value = "booksToRemove") String booksToRemove) {
-        if (bookService.removeAllBook(booksToRemove)) {
-            logger.info("Books with template " + booksToRemove + " is deleted");
-        } else {
-            logger.info("Book with template " + booksToRemove + " is not find");
-        }
+    @PostMapping("/uploadFile")
+    public String uploadFile(@RequestParam("file") MultipartFile file) throws BookShelfFileException, IOException {
+        String rootPath = System.getProperty("catalina.home") + File.separator + "external_uploads";
+        bookService.saveFile(file, rootPath);
         return "redirect:/books/shelf";
     }
+
+    @PostMapping("/downloadFile")
+    public String downloadFile(@RequestParam("file") MultipartFile file) throws BookShelfFileException, IOException {
+        String rootPath = System.getProperty("user.home") + File.separator + "Downloads" + File.separator + "external_downloads";
+        bookService.saveFile(file, rootPath);
+        return "redirect:/books/shelf";
+    }
+
+    @ExceptionHandler(BookShelfFileException.class)
+    public String handlerError(Model model, BookShelfFileException exception) {
+        model.addAttribute("errorMessage", exception.getMessage());
+        return "errors/500";
+    }
+
+    @ExceptionHandler(IOException.class)
+    public String handlerError(Model model, IOException exception) {
+        model.addAttribute("errorMessage", exception.getMessage());
+        return "errors/500";
+    }
+
 }

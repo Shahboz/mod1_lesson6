@@ -1,63 +1,128 @@
 package org.example.app.services;
 
 import org.apache.log4j.Logger;
+import org.example.app.exceptions.BookShelfFileException;
 import org.example.web.dto.Book;
+import org.example.web.dto.BookField;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.sql.ResultSet;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class BookRepository implements ProjectRepository<Book> {
+public class BookRepository implements ProjectRepository<Book>, ApplicationContextAware {
 
     private final Logger logger = Logger.getLogger(BookRepository.class);
-    private final List<Book> repo = new ArrayList<>();
+    // private final List<Book> repo = new ArrayList<>();
+    private ApplicationContext context;
+    private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    @Override
-    public List<Book> retreiveAll() {
-        return new ArrayList<>(repo);
+    @Autowired
+    public BookRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
-    public List<Book> retreive(String filterValue) {
-        if(filterValue == null || filterValue.isEmpty())
+    public List<Book> retreiveAll() {
+        List<Book> books = jdbcTemplate.query("SELECT * FROM books", (ResultSet rs, int rownum) -> {
+            Book book = new Book();
+            book.setId(rs.getInt("id"));
+            book.setAuthor(rs.getString("author"));
+            book.setTitle(rs.getString("title"));
+            book.setSize(rs.getInt("size"));
+            return book;
+        });
+        return new ArrayList<>(books);
+    }
+
+    @Override
+    public List<Book> retreive(BookField bookField) {
+        if(bookField == null || bookField.getField() == null || bookField.getField().isEmpty())
             return retreiveAll();
-        List<Book> books = new ArrayList<>();
-        for(Book book : repo) {
-            if(book.getAuthor().matches(filterValue) || book.getTitle().matches(filterValue) || book.getSize().toString().matches(filterValue)) {
-                books.add(book);
-            }
-        }
-        logger.info("Find " + books.size() + " books");
-        return  books;
+        MapSqlParameterSource parameterSource = new MapSqlParameterSource();
+        parameterSource.addValue("author", bookField.getField(), Types.VARCHAR);
+        parameterSource.addValue("title", bookField.getField(), Types.VARCHAR);
+        parameterSource.addValue("size", bookField.getField(), Types.VARCHAR);
+        List<Book> books = jdbcTemplate.query("SELECT * FROM books WHERE REGEXP_LIKE(author, :author) or REGEXP_LIKE(title, :title) or REGEXP_LIKE(size, :size)", parameterSource, (ResultSet rs, int rownum) -> {
+            Book book = new Book();
+            book.setId(rs.getInt("id"));
+            book.setAuthor(rs.getString("author"));
+            book.setTitle(rs.getString("title"));
+            book.setSize(rs.getInt("size"));
+            return book;
+        });
+        return new ArrayList<>(books);
     }
 
     @Override
     public void store(Book book) {
-        if(book.getAuthor().isEmpty() && book.getTitle().isEmpty() && book.getSize() == null) {
-            logger.info("Empty book");
-        } else {
-            book.setId(book.hashCode());
-            logger.info("store new book: " + book);
-            repo.add(book);
-        }
+        MapSqlParameterSource parameterSource = new MapSqlParameterSource();
+        parameterSource.addValue("author", book.getAuthor());
+        parameterSource.addValue("title", book.getTitle());
+        parameterSource.addValue("size", book.getSize());
+        jdbcTemplate.update("INSERT INTO books(author, title, size) VALUES (:author, :title, :size)", parameterSource);
+        logger.info("store new book: " + book);
+        //book.setId(context.getBean(IdProvider.class).providerId(book));
+        // repo.add(book);
     }
 
     @Override
     public boolean removeItemById(Integer bookIdToRemove) {
-        for (Book book : retreiveAll()) {
-            if (book.getId().equals(bookIdToRemove)) {
-                logger.info("remove book completed: " + book);
-                return repo.remove(book);
-            }
-        }
-        return false;
+        MapSqlParameterSource parameterSource = new MapSqlParameterSource();
+        parameterSource.addValue("id", bookIdToRemove);
+        jdbcTemplate.update("DELETE FROM books where id = :id", parameterSource);
+        logger.info("remove book completed");
+        return true;
     }
 
     @Override
-    public boolean removeAllBook(String bookToRemove) {
-        return repo.removeIf(book -> book.getAuthor().matches(bookToRemove)) ||
-                repo.removeIf(book -> book.getTitle().matches(bookToRemove)) ||
-                repo.removeIf(book -> book.getSize().toString().matches(bookToRemove));
+    public boolean removeAllBook(BookField bookField) {
+        MapSqlParameterSource parameterSource = new MapSqlParameterSource();
+        parameterSource.addValue("author", bookField.getField(), Types.VARCHAR);
+        parameterSource.addValue("title", bookField.getField(), Types.VARCHAR);
+        parameterSource.addValue("size", bookField.getField(), Types.VARCHAR);
+        jdbcTemplate.update("DELETE FROM books where REGEXP_LIKE(author, :author) or REGEXP_LIKE(title, :title) or REGEXP_LIKE(size, :size)", parameterSource);
+        logger.info("remove all book completed");
+        return true;
     }
+
+    @Override
+    public void saveFile(MultipartFile file, String savePath) throws BookShelfFileException, IOException {
+        if(file.isEmpty()) {
+            throw new BookShelfFileException("Empty file");
+        }
+        String fileName = file.getOriginalFilename();
+        byte[] bytes = file.getBytes();
+
+        // create dir
+        File dir = new File(savePath);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        // create file
+        File serverFile = new File(dir.getAbsolutePath() + File.separator + fileName);
+        BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(serverFile));
+        outputStream.write(bytes);
+        outputStream.close();
+        logger.info("file saved at: " + serverFile.getAbsolutePath());
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.context = applicationContext;
+    }
+
 }

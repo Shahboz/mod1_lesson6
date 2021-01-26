@@ -2,17 +2,17 @@ package org.example.web.dto;
 
 import javax.validation.constraints.NotEmpty;
 
-public class BookToRemove {
+public class BookField {
 
     @NotEmpty
-    private String bookToRemove;
+    private String field;
 
-    public void setBookToRemove(String bookToRemove) {
-        this.bookToRemove = bookToRemove;
+    public void setField(String field) {
+        this.field = field;
     }
 
-    public String getBookToRemove() {
-        return bookToRemove;
+    public String getField() {
+        return field;
     }
 
 }

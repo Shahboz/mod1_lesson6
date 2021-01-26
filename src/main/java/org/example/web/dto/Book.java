@@ -1,9 +1,21 @@
 package org.example.web.dto;
 
+import javax.validation.constraints.Digits;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
+
 public class Book {
     private Integer id;
+    @NotNull
+    @Pattern(regexp = "[a-zA-Zа-яА-ЯёЁ\\s]+")
     private String author;
+    @NotNull
+    @Pattern(regexp = "[a-zа-яёA-ZА-ЯЁ0-9\\s]+")
     private String title;
+    @NotNull
+    @Min(value = 1)
+    @Digits(integer = 4, fraction = 0)
     private Integer size;
 
     public Integer getId() {
