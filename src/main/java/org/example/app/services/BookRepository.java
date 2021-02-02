@@ -1,7 +1,7 @@
 package org.example.app.services;
 
+
 import org.apache.log4j.Logger;
-import org.example.app.exceptions.BookShelfFileException;
 import org.example.web.dto.Book;
 import org.example.web.dto.BookField;
 import org.springframework.beans.BeansException;
@@ -11,15 +11,11 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-import org.springframework.web.multipart.MultipartFile;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+
 
 @Repository
 public class BookRepository implements ProjectRepository<Book>, ApplicationContextAware {
@@ -28,6 +24,7 @@ public class BookRepository implements ProjectRepository<Book>, ApplicationConte
     // private final List<Book> repo = new ArrayList<>();
     private ApplicationContext context;
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final List<String> listFiles = new ArrayList<>();
 
     @Autowired
     public BookRepository(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -48,13 +45,13 @@ public class BookRepository implements ProjectRepository<Book>, ApplicationConte
     }
 
     @Override
-    public List<Book> retreive(BookField bookField) {
-        if(bookField == null || bookField.getField() == null || bookField.getField().isEmpty())
+    public List<Book> retreive(String filterValue) {
+        if(filterValue == null || filterValue.isEmpty())
             return retreiveAll();
         MapSqlParameterSource parameterSource = new MapSqlParameterSource();
-        parameterSource.addValue("author", bookField.getField(), Types.VARCHAR);
-        parameterSource.addValue("title", bookField.getField(), Types.VARCHAR);
-        parameterSource.addValue("size", bookField.getField(), Types.VARCHAR);
+        parameterSource.addValue("author", filterValue, Types.VARCHAR);
+        parameterSource.addValue("title", filterValue, Types.VARCHAR);
+        parameterSource.addValue("size", filterValue, Types.VARCHAR);
         List<Book> books = jdbcTemplate.query("SELECT * FROM books WHERE REGEXP_LIKE(author, :author) or REGEXP_LIKE(title, :title) or REGEXP_LIKE(size, :size)", parameterSource, (ResultSet rs, int rownum) -> {
             Book book = new Book();
             book.setId(rs.getInt("id"));
@@ -63,7 +60,13 @@ public class BookRepository implements ProjectRepository<Book>, ApplicationConte
             book.setSize(rs.getInt("size"));
             return book;
         });
+        logger.info("find books: " + books.size());
         return new ArrayList<>(books);
+    }
+
+    @Override
+    public List<String> getFiles() {
+        return new ArrayList<>(listFiles);
     }
 
     @Override
@@ -99,25 +102,9 @@ public class BookRepository implements ProjectRepository<Book>, ApplicationConte
     }
 
     @Override
-    public void saveFile(MultipartFile file, String savePath) throws BookShelfFileException, IOException {
-        if(file.isEmpty()) {
-            throw new BookShelfFileException("Empty file");
-        }
-        String fileName = file.getOriginalFilename();
-        byte[] bytes = file.getBytes();
-
-        // create dir
-        File dir = new File(savePath);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-
-        // create file
-        File serverFile = new File(dir.getAbsolutePath() + File.separator + fileName);
-        BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(serverFile));
-        outputStream.write(bytes);
-        outputStream.close();
-        logger.info("file saved at: " + serverFile.getAbsolutePath());
+    public void addFile(String fileName) {
+        listFiles.add(fileName);
+        logger.info("Count files: " + listFiles.size());
     }
 
     @Override

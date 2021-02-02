@@ -97,18 +97,21 @@
         </table>
     </form>
 
-    <form method="post" th:action="@{/books/downloadFile}" enctype="multipart/form-data">
+    <form method="post" th:action="@{/books/downloadFile}">
         <table>
-            <tr>
+            <tr th:each="file : ${fileList}">
                 <td>
-                    <input type="file" name="file"/>
+                    <input type="radio" name="fileList" th:value="${file}" th:text="${file}" th:name="fileName">
                 </td>
+            </tr>
+            <tr>
                 <td>
                     <input type="submit" value="Download"/>
                 </td>
             </tr>
         </table>
     </form>
+
     <form method="get" th:action="@{/books/shelf}">
         <table>
             <tr>

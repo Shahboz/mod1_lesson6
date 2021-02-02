@@ -1,14 +1,13 @@
 package org.example.app.services;
 
+
 import org.apache.log4j.Logger;
-import org.example.app.exceptions.BookShelfFileException;
 import org.example.web.dto.Book;
 import org.example.web.dto.BookField;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import java.io.IOException;
 import java.util.List;
+
 
 @Service
 public class BookService {
@@ -25,8 +24,8 @@ public class BookService {
         return bookRepo.retreiveAll();
     }
 
-    public List<Book> getBooks(BookField bookField) {
-        return bookRepo.retreive(bookField);
+    public List<Book> getBooks(String filterValue) {
+        return bookRepo.retreive(filterValue);
     }
 
     public void saveBook(Book book) {
@@ -49,8 +48,11 @@ public class BookService {
         logger.info("default DESTROY in book service");
     }
 
-    public void saveFile(MultipartFile file, String savePath) throws BookShelfFileException, IOException {
-        bookRepo.saveFile(file, savePath);
+    public List<String> getFiles() {
+        return bookRepo.getFiles();
     }
 
+    public void addFile(String fileName) {
+        bookRepo.addFile(fileName);
+    }
 }
