@@ -9,6 +9,10 @@ import org.example.web.dto.BookField;
 import org.example.web.dto.BookIdToRemove;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -20,7 +24,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
 
 
 @Controller
@@ -119,31 +122,24 @@ public class BookShelfController {
         return "redirect:/books/shelf";
     }
 
-    @PostMapping("/downloadFile")
-    public String downloadFile(@RequestParam(value = "fileName", required = false) String fileName) throws BookShelfFileException, IOException {
+    @GetMapping("/downloadFile")
+    public ResponseEntity<InputStreamResource> downloadFile(@RequestParam(value = "fileName") String fileName) throws BookShelfFileException, IOException {
         if(fileName == null || fileName.isEmpty()) {
             throw new BookShelfFileException("Choose file to download");
         }
         String inputFileAbsolutePath = System.getProperty("catalina.home") + File.separator + "external_uploads" + File.separator + fileName;
-        String outputFilePath = System.getProperty("catalina.home") + File.separator + "external_downloads";
 
         File inputFile = new File(inputFileAbsolutePath);
         if(!inputFile.exists() || inputFile.isDirectory()) {
             throw new BookShelfFileException("File '" + inputFileAbsolutePath + "' can not find");
         }
+        InputStreamResource resource = new InputStreamResource(new FileInputStream(inputFile));
 
-        // create dir
-        File dir = new File(outputFilePath);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-
-        FileChannel src = new FileInputStream(inputFile).getChannel();
-        FileChannel dest = new FileOutputStream(dir.getAbsolutePath() + File.separator + fileName).getChannel();
-        dest.transferFrom(src, 0, src.size());
-        dest.close();
-        logger.info("File '" + fileName + "' copied");
-        return "redirect:/books/shelf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + inputFile.getName())
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(inputFile.length())
+                .body(resource);
     }
 
     @ExceptionHandler(BookShelfFileException.class)
